@@ -4,78 +4,33 @@
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
-
-
-//Test which of these are actually necessary
-/*
-https://www.softprayog.in/programming/interprocess-communication-using-posix-shared-memory-in-linux
-https://www.softprayog.in/programming/semaphore-basics
-*/
-
-#include <string>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <semaphore.h>
-
-
 #include "producer.hpp"
 
-
-int processNUM = 0; //Defines which process this is
+const int processNUM = 0; //Defines which process this is
 
 int main() {
+   int TABLESIZE = sizeof(sharedTable<int>);
 
-   //
-   /*Pretend this is the table*/
-   //
-   int dataSize = 2;
-   int totalProcesses = 2;
+   int sharedMemory = shm_open("table", O_CREAT | O_RDWR, 0666);
+   ftruncate(sharedMemory, TABLESIZE);
 
-   nodeTable<int> tableData[dataSize]; //Stores the data itself
+   sharedTable<int>* sharedMemTable = new sharedTable<int>;
+   void* memMap = mmap(0, TABLESIZE, PROT_WRITE | PROT_READ, MAP_SHARED, sharedMemory, 0);
 
-   //Process Activity Semaphores
-   int turn = 0; //Tracks which processes turn it is
-   bool prodInCrit = false;
-   bool conInCrit = false;
-   bool flag[totalProcesses]; //Tracks processes that are ready
-   //
-   //
-   //
-
-   int TABLESIZE = 4096;
-
-   int shm_fd = shm_open("table", O_CREAT | O_RDWR, 0666);
-   ftruncate(shm_fd, TABLESIZE);
-   void* shmPTR = mmap(0, TABLESIZE, PROT_WRITE, MAP_SHARED, shm_fd, 0);
-
-   if (shmPTR == MAP_FAILED) { //Checks if the shared memory space is created
+   if (memMap == MAP_FAILED) { //Checks if the shared memory space is created
       std::cerr << "Failed to create shared memory space." << std::endl;
       exit(1);
    }
-
-
-   
-
-
-   /*
-   How do we add variables to the shared memory space?
-
-   Threading requires pthread library
-   
-   are the semaphores separate from the shared memory space?
-   */
 
    int* dataGen = nullptr; //Initialize pointer to generated data
    nodeTable<int>* dataIN = nullptr; //Initialize the dataIN pointer to nullptr
    nodeTable<int> prodSlotTrack[dataSize]; //Local version of table data
 
    while(true) {
-      flag[processNUM] = true; //shows producer is ready and waiting
+      sharedMemTable->flag[processNUM] = true; //shows producer is ready and waiting
 
       //Thread 1: Generates the data
       if (dataGen == nullptr) {
@@ -86,11 +41,11 @@ int main() {
       //
       //Critical section
       //
-      while (conInCrit == true && turn != 0) ; //Do nothing while consumer is in critical section
-      prodInCrit = true; //Updates semaphore to show process 0 is ins critical section
+      while (sharedMemTable->conInCrit == true && sharedMemTable->turn != 0) ; //Do nothing while consumer is in critical section
+      sharedMemTable->prodInCrit = true; //Updates semaphore to show process 0 is ins critical section
 
       //Thread 2: Updates the local version of the table
-      for (int i = 0; i < dataSize; ++i) { prodSlotTrack[i] = tableData[i]; }
+      for (int i = 0; i < dataSize; ++i) { prodSlotTrack[i] = sharedMemTable->tableData[i]; }
 
       //Thread 2: Looks for an empty slot in local table
       for (int i = 0; i < dataSize && dataIN == nullptr; ++i) {
@@ -110,10 +65,10 @@ int main() {
       //Thread 2: Updates the shared table
       while (dataIN != nullptr) ; //Wait until the empty slot is filled
 
-      for (int i = 0; i < dataSize; ++i) { tableData[i] = prodSlotTrack[i]; }
+      for (int i = 0; i < dataSize; ++i) { sharedMemTable->tableData[i] = prodSlotTrack[i]; }
 
-      turn = 1; //Updates the semaphore turn
-      prodInCrit = false; //Updates the critical section lock
+      sharedMemTable->turn = 1; //Updates the semaphore turn
+      sharedMemTable->prodInCrit = false; //Updates the critical section lock
       //
       //End of critical section
       //

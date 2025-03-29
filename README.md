@@ -3,15 +3,12 @@ Created by Thomas Bond
 Date: March 6th 2025
 Github: TB-4126
 
-
-[I want a high-level overview of the project that a non-technical (like a hiring manager) person will understand]
-
 Submission for Programming Assignment 1,
 as part of Dr. Qiang Guan's CS 33211 Operating Systems course
 
-[known issues]
+To compile the programs run the following two commands in a Linux environment:
+$ gcc producer.cpp -o producer
+$ gcc consumer.cpp -o consumer
 
-
-[visuals if you have them, give me some pics]
-
-[DETAILED instructions to clone/build/run the program]
+Then once both are compiled run the following command:
+$ ./producer & ./consumer
